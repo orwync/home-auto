@@ -5,30 +5,38 @@ class Relay:
     """
     Controls a single-channel 5V relay module.
 
-    Most relay modules are ACTIVE LOW:
-      - GPIO LOW  → relay coil energized → NC opens  → light OFF
-      - GPIO HIGH → relay coil de-energized → NC closed → light ON (default)
+    active_low: True if the module triggers on GPIO LOW (most common).
+    contact:    'NC' (Normally Closed) or 'NO' (Normally Open) — whichever
+                terminal the light is wired to on the relay.
 
-    If your module is active HIGH, set active_low=False.
+    NC wiring: light ON = relay de-energized (coil off, NC contact closed)
+    NO wiring: light ON = relay energized   (coil on,  NO contact closed)
     """
 
-    def __init__(self, pin: int, active_low: bool = True):
+    def __init__(self, pin: int, active_low: bool = True, contact: str = 'NC'):
         self.pin = pin
         self.active_low = active_low
+        self.contact = contact  # 'NC' or 'NO'
 
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
-        # Default state: relay de-energized → light ON
-        initial = GPIO.HIGH if active_low else GPIO.LOW
-        GPIO.setup(self.pin, GPIO.OUT, initial=initial)
+        GPIO.setup(self.pin, GPIO.OUT, initial=self._signal(on=True))
+
+    def _signal(self, on: bool) -> int:
+        """Return the GPIO level needed to set the light on or off."""
+        # NC: light on  → coil de-energized | light off → coil energized
+        # NO: light on  → coil energized     | light off → coil de-energized
+        energize = (self.contact == 'NO') if on else (self.contact == 'NC')
+        if self.active_low:
+            return GPIO.LOW if energize else GPIO.HIGH
+        else:
+            return GPIO.HIGH if energize else GPIO.LOW
 
     def on(self):
-        """Turn the light ON (de-energize relay coil via NC)."""
-        GPIO.output(self.pin, GPIO.HIGH if self.active_low else GPIO.LOW)
+        GPIO.output(self.pin, self._signal(on=True))
 
     def off(self):
-        """Turn the light OFF (energize relay coil, NC opens)."""
-        GPIO.output(self.pin, GPIO.LOW if self.active_low else GPIO.HIGH)
+        GPIO.output(self.pin, self._signal(on=False))
 
     def cleanup(self):
         GPIO.cleanup(self.pin)
