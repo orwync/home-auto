@@ -14,11 +14,15 @@ The light turns ON and OFF every 10 seconds. Default state is **ON** — if the 
 
 ### Control side (Pi → Relay module)
 
-| Relay Pin | Pi Physical Pin | BCM GPIO |
-|-----------|-----------------|----------|
-| VCC       | Pin 2 or 4 (5V) | —        |
-| GND       | Pin 6           | —        |
-| IN        | Pin 11          | GPIO17   |
+| Relay Pin | Pi Physical Pin  | BCM GPIO |
+|-----------|------------------|----------|
+| VCC       | Pin 1 **(3.3V)** | —        |
+| GND       | Pin 6            | —        |
+| IN        | Pin 11           | GPIO17   |
+
+> **Important:** Use Pin 1 (3.3V), not Pin 2/4 (5V). The Pi's GPIO outputs 3.3V logic.
+> Powering the relay module from 5V causes the optocoupler to stay partially on,
+> so the relay never de-energizes.
 
 ### Load side (Relay → Light)
 

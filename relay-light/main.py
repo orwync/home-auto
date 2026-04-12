@@ -14,7 +14,7 @@ TOGGLE_INTERVAL = 10  # seconds
 
 
 def main():
-    relay = Relay(pin=RELAY_GPIO_PIN, active_low=False, contact='NO')
+    relay = Relay(pin=RELAY_GPIO_PIN, active_low=True, contact='NO')
 
     def shutdown(sig, frame):
         print("\nShutting down — restoring light to ON...")
