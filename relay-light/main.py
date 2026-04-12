@@ -14,7 +14,7 @@ TOGGLE_INTERVAL = 10  # seconds
 
 
 def main():
-    relay = Relay(pin=RELAY_GPIO_PIN, active_low=True, contact='NO')
+    relay = Relay(pin=RELAY_GPIO_PIN, active_low=False, contact='NO')
 
     def shutdown(sig, frame):
         print("\nShutting down — restoring light to ON...")
@@ -28,6 +28,11 @@ def main():
     print(f"Relay controller started on GPIO{RELAY_GPIO_PIN}")
     print(f"Toggling every {TOGGLE_INTERVAL}s. Default state: ON. Ctrl+C to stop.\n")
 
+    # Startup test: flash once to confirm relay is responding
+    print("Startup test: OFF for 2s...")
+    relay.off()
+    time.sleep(2)
+    print("Startup test: ON — entering main loop\n")
     relay.on()
     state = True  # True = ON
 
