@@ -2,7 +2,15 @@
 
 Controls a 100W mains light via a 1-channel 5V relay module on a Raspberry Pi 4B.
 
-The light turns ON and OFF every 10 seconds. Default state is **ON** — if the Pi loses power the light stays on (relay de-energized, NC contact closed).
+## Schedule
+
+| Time | State |
+|------|-------|
+| 00:00 – 12:00 | ON |
+| 12:00 – 18:00 | OFF |
+| 18:00 – 00:00 | ON |
+
+If the Pi loses power the light defaults to **ON** (relay de-energized, NO contact open — wait, see wiring below).
 
 ## Hardware
 
@@ -23,18 +31,20 @@ The light turns ON and OFF every 10 seconds. Default state is **ON** — if the 
 > **Important:** Use Pin 1 (3.3V), not Pin 2/4 (5V). The Pi's GPIO outputs 3.3V logic.
 > Powering the relay module from 5V causes the optocoupler to stay partially on,
 > so the relay never de-energizes.
+>
+> If your module has a **JD-VCC** pin: remove the jumper, connect JD-VCC to Pin 2 (5V)
+> and VCC to Pin 1 (3.3V). This keeps the coil on 5V while the signal circuit runs on 3.3V.
 
 ### Load side (Relay → Light)
 
 ```
 Mains Live ──► COM
-              NC ──► Light (Live terminal)
-Mains Neutral ────► Light (Neutral terminal)
+              NO ──► Light (Live terminal)
+Mains Neutral ───► Light (Neutral terminal)
 ```
 
-Use the **NC (Normally Closed)** terminal so the light is on when the relay is not energized.
-
-> **Warning:** The load side carries mains voltage (120V/240V AC). Ensure all connections are properly insulated and the circuit is unpowered before wiring.
+> **Warning:** The load side carries mains voltage (120V/240V AC). Ensure all connections
+> are properly insulated and the circuit is unpowered before wiring.
 
 ## Setup
 
@@ -52,20 +62,34 @@ Press `Ctrl+C` to stop. The light will be restored to ON before exit.
 
 ## Configuration
 
-Edit `main.py` to adjust:
+Edit `main.py` to adjust the schedule:
 
-| Variable          | Default | Description                        |
-|-------------------|---------|------------------------------------|
-| `RELAY_GPIO_PIN`  | `17`    | BCM GPIO pin connected to relay IN |
-| `TOGGLE_INTERVAL` | `10`    | Seconds between ON/OFF toggles     |
+| Variable         | Default | Description                          |
+|------------------|---------|--------------------------------------|
+| `RELAY_GPIO_PIN` | `17`    | BCM GPIO pin connected to relay IN   |
+| `OFF_START`      | `12`    | Hour (24h) when light turns OFF      |
+| `OFF_END`        | `18`    | Hour (24h) when light turns back ON  |
+| `CHECK_INTERVAL` | `30`    | Seconds between schedule checks      |
 
-If your relay module is active HIGH instead of active LOW, set `active_low=False` in the `Relay(...)` call in `main.py`.
+## Run on boot (optional)
+
+To start automatically on boot, add a cron entry:
+
+```bash
+crontab -e
+```
+
+Add:
+```
+@reboot python3 /home/pi/Projects/home-auto/relay-light/main.py &
+```
 
 ## Files
 
 ```
 relay-light/
-├── main.py          # Entry point, toggle loop
+├── main.py          # Entry point, schedule loop
 ├── relay.py         # Relay class (GPIO control)
+├── diag.py          # Raw GPIO diagnostic tool
 └── requirements.txt
 ```
