@@ -1,8 +1,13 @@
 PYTHON   := python3
 PID_FILE := /tmp/relay-light.pid
 LOG_FILE := /tmp/relay-light.log
+SERVICE  := relay-light
 
-.PHONY: install run stop restart diag status logs clean
+.PHONY: install run start stop restart status logs diag clean \
+        service-install service-uninstall service-start service-stop \
+        service-restart service-status service-logs
+
+# ── Python ────────────────────────────────────────────────────────────────────
 
 install:
 	pip install -r requirements.txt
@@ -41,3 +46,30 @@ clean:
 	find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete 2>/dev/null || true
 	rm -f $(PID_FILE) $(LOG_FILE)
+
+# ── systemd ───────────────────────────────────────────────────────────────────
+
+service-install:
+	bash scripts/install-service.sh
+
+service-uninstall:
+	sudo systemctl stop $(SERVICE) || true
+	sudo systemctl disable $(SERVICE) || true
+	sudo rm -f /etc/systemd/system/$(SERVICE).service
+	sudo systemctl daemon-reload
+	@echo "Service removed."
+
+service-start:
+	sudo systemctl start $(SERVICE)
+
+service-stop:
+	sudo systemctl stop $(SERVICE)
+
+service-restart:
+	sudo systemctl restart $(SERVICE)
+
+service-status:
+	sudo systemctl status $(SERVICE)
+
+service-logs:
+	sudo journalctl -u $(SERVICE) -f
