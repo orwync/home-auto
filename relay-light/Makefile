@@ -1,7 +1,8 @@
-PYTHON  := python3
+PYTHON   := python3
 PID_FILE := /tmp/relay-light.pid
+LOG_FILE := /tmp/relay-light.log
 
-.PHONY: install run stop restart diag status clean
+.PHONY: install run stop restart diag status logs clean
 
 install:
 	pip install -r requirements.txt
@@ -9,10 +10,10 @@ install:
 run:
 	$(PYTHON) main.py
 
-# Run in background and save PID
+# Run in background, log to file
 start:
-	$(PYTHON) main.py & echo $$! > $(PID_FILE)
-	@echo "Started (PID $$(cat $(PID_FILE)))"
+	$(PYTHON) main.py >> $(LOG_FILE) 2>&1 & echo $$! > $(PID_FILE)
+	@echo "Started (PID $$(cat $(PID_FILE))) — logs at $(LOG_FILE)"
 
 stop:
 	@if [ -f $(PID_FILE) ]; then \
@@ -30,10 +31,13 @@ status:
 		echo "Not running"; \
 	fi
 
+logs:
+	tail -f $(LOG_FILE)
+
 diag:
 	$(PYTHON) diag.py
 
 clean:
 	find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete 2>/dev/null || true
-	rm -f $(PID_FILE)
+	rm -f $(PID_FILE) $(LOG_FILE)
