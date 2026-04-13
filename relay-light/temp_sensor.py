@@ -36,10 +36,20 @@ class TempSensor:
 
 
 if __name__ == "__main__":
+    print(f"Reading DHT22 on GPIO4 (up to {_RETRIES} attempts, {_RETRY_DELAY}s apart)...")
     sensor = TempSensor()
-    temp, hum = sensor.read()
-    if temp is not None:
-        print(f"Temp: {temp:.1f}°C  Humidity: {hum:.1f}%")
+    for attempt in range(_RETRIES):
+        try:
+            temp = sensor._dht.temperature
+            hum  = sensor._dht.humidity
+            print(f"  Attempt {attempt + 1}: temp={temp}  hum={hum}")
+            if temp is not None and hum is not None and not (temp == 0 and hum == 0):
+                print(f"Temp: {temp:.1f}°C  Humidity: {hum:.1f}%")
+                break
+        except RuntimeError as e:
+            print(f"  Attempt {attempt + 1}: RuntimeError — {e}")
+        if attempt < _RETRIES - 1:
+            time.sleep(_RETRY_DELAY)
     else:
-        print("Read failed")
+        print("Read failed after all attempts.")
     sensor.cleanup()
