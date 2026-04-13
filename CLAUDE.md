@@ -23,7 +23,7 @@ Home automation projects running on Raspberry Pi 4B.
 - DHT22 data pin: GPIO4 (physical pin 7). Requires a 10 kΩ pull-up resistor to 3.3V.
 - All sensor/relay VCC must be wired to Pin 1 (3.3V), not 5V — Pi GPIO logic is 3.3V.
 - All scripts must restore hardware to a safe default state on exit (light ON, relay de-energized).
-- Use `RPi.GPIO` for relay GPIO control. Use `adafruit-circuitpython-dht` for DHT22.
+- Use `RPi.GPIO` for relay GPIO control. Use `pigpio` (daemon-based, hardware-timed) for DHT22 — pure Python bit-banging is too jittery for reliable reads.
 - Light is wired to NO (Normally Open) terminal on the relay.
 - DHT22 reads are best-effort — transient failures (RuntimeError) are expected and retried silently.
 

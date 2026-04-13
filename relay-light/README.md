@@ -132,6 +132,12 @@ Hysteresis prevents rapid cycling between thresholds.
 
 ```bash
 pip install -r requirements.txt
+
+# Start the pigpio daemon (required for DHT22 hardware-timed reads)
+sudo pigpiod
+
+# To start pigpiod automatically on boot:
+sudo systemctl enable pigpiod
 ```
 
 ## Run
