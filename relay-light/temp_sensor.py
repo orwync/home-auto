@@ -10,7 +10,8 @@ class TempSensor:
             pin = getattr(board, f"D{gpio_pin}")
         except AttributeError:
             raise ValueError(f"GPIO{gpio_pin} is not a valid board pin.")
-        self._dht = adafruit_dht.DHT22(pin)
+        # use_pulseio=False: PulseIO backend conflicts with RPi GPIO subsystem
+        self._dht = adafruit_dht.DHT22(pin, use_pulseio=False)
 
     def read(self) -> tuple[float | None, float | None]:
         """Return (temperature_celsius, humidity_percent), or (None, None) on transient error."""
