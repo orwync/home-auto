@@ -1,5 +1,9 @@
+import time
 import adafruit_dht
 import board
+
+_RETRIES = 3
+_RETRY_DELAY = 2.0  # DHT22 minimum interval between reads
 
 
 class TempSensor:
@@ -15,11 +19,17 @@ class TempSensor:
 
     def read(self) -> tuple[float | None, float | None]:
         """Return (temperature_celsius, humidity_percent), or (None, None) on transient error."""
-        try:
-            return self._dht.temperature, self._dht.humidity
-        except RuntimeError:
-            # DHT sensors occasionally miss a read; caller should retry.
-            return None, None
+        for attempt in range(_RETRIES):
+            try:
+                temp, hum = self._dht.temperature, self._dht.humidity
+                # (0, 0) means all bits were misread — treat as a failed read
+                if temp is not None and hum is not None and not (temp == 0 and hum == 0):
+                    return temp, hum
+            except RuntimeError:
+                pass
+            if attempt < _RETRIES - 1:
+                time.sleep(_RETRY_DELAY)
+        return None, None
 
     def cleanup(self):
         self._dht.exit()
