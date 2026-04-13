@@ -3,7 +3,7 @@ PID_FILE := /tmp/relay-light.pid
 LOG_FILE := /tmp/relay-light.log
 SERVICE  := relay-light
 
-.PHONY: install run start stop restart status logs diag power clean \
+.PHONY: install run start stop restart status logs diag power temp test clean \
         service-install service-uninstall service-start service-stop \
         service-restart service-status service-logs
 
@@ -44,6 +44,12 @@ diag:
 
 power:
 	$(PYTHON) power.py
+
+temp:
+	$(PYTHON) temp_sensor.py
+
+test:
+	$(PYTHON) -m unittest discover -s tests -v
 
 clean:
 	find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true

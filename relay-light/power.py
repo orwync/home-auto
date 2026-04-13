@@ -16,44 +16,57 @@ OFF_END   = 18  # hour light turns back ON
 COST_PER_KWH = 0.24  # £/kWh — change to your local rate
 CURRENCY     = "£"
 
-# ── Calculations ──────────────────────────────────────────────────────────────
-hours_off    = OFF_END - OFF_START          # light off window
-hours_on     = 24 - hours_off               # light on window
 
-# Energy per day (Wh)
-wh_light_on  = hours_on  * (PI_WATTS + LIGHT_WATTS)
-wh_light_off = hours_off * PI_WATTS
-wh_daily     = wh_light_on + wh_light_off
+def calculate(pi_watts, light_watts, off_start, off_end, cost_per_kwh):
+    """Return a dict of energy and cost figures for the given parameters."""
+    hours_off = off_end - off_start
+    hours_on  = 24 - hours_off
 
-kwh_daily    = wh_daily / 1000
-kwh_monthly  = kwh_daily * 30
-kwh_yearly   = kwh_daily * 365
+    wh_daily = (hours_on * (pi_watts + light_watts)) + (hours_off * pi_watts)
 
-cost_daily   = kwh_daily   * COST_PER_KWH
-cost_monthly = kwh_monthly * COST_PER_KWH
-cost_yearly  = kwh_yearly  * COST_PER_KWH
+    kwh_daily   = wh_daily / 1000
+    kwh_monthly = kwh_daily * 30
+    kwh_yearly  = kwh_daily * 365
 
-# ── Report ────────────────────────────────────────────────────────────────────
-print("=" * 44)
-print("  Relay-Light Power & Cost Report")
-print("=" * 44)
+    return {
+        "hours_on":    hours_on,
+        "hours_off":   hours_off,
+        "kwh_daily":   kwh_daily,
+        "kwh_monthly": kwh_monthly,
+        "kwh_yearly":  kwh_yearly,
+        "cost_daily":   kwh_daily   * cost_per_kwh,
+        "cost_monthly": kwh_monthly * cost_per_kwh,
+        "cost_yearly":  kwh_yearly  * cost_per_kwh,
+    }
 
-print(f"\n{'Hardware':}")
-print(f"  Raspberry Pi 4B       {PI_WATTS:>6.1f} W")
-print(f"  Flood light           {LIGHT_WATTS:>6.1f} W")
-print(f"  Combined (light ON)   {PI_WATTS + LIGHT_WATTS:>6.1f} W")
 
-print(f"\nSchedule")
-print(f"  Light ON   {hours_on:>2}h/day  (00:00–{OFF_START:02d}:00 and {OFF_END:02d}:00–00:00)")
-print(f"  Light OFF  {hours_off:>2}h/day  ({OFF_START:02d}:00–{OFF_END:02d}:00, Pi only)")
+def report():
+    r = calculate(PI_WATTS, LIGHT_WATTS, OFF_START, OFF_END, COST_PER_KWH)
 
-print(f"\nEnergy")
-print(f"  Daily                 {kwh_daily:>6.3f} kWh")
-print(f"  Monthly (~30 days)    {kwh_monthly:>6.2f} kWh")
-print(f"  Yearly  (~365 days)   {kwh_yearly:>6.1f} kWh")
+    print("=" * 44)
+    print("  Relay-Light Power & Cost Report")
+    print("=" * 44)
 
-print(f"\nCost  (@ {CURRENCY}{COST_PER_KWH:.2f}/kWh)")
-print(f"  Daily                 {CURRENCY}{cost_daily:>5.2f}")
-print(f"  Monthly               {CURRENCY}{cost_monthly:>5.2f}")
-print(f"  Yearly                {CURRENCY}{cost_yearly:>6.2f}")
-print("=" * 44)
+    print(f"\nHardware")
+    print(f"  Raspberry Pi 4B       {PI_WATTS:>6.1f} W")
+    print(f"  Flood light           {LIGHT_WATTS:>6.1f} W")
+    print(f"  Combined (light ON)   {PI_WATTS + LIGHT_WATTS:>6.1f} W")
+
+    print(f"\nSchedule")
+    print(f"  Light ON   {r['hours_on']:>2}h/day  (00:00–{OFF_START:02d}:00 and {OFF_END:02d}:00–00:00)")
+    print(f"  Light OFF  {r['hours_off']:>2}h/day  ({OFF_START:02d}:00–{OFF_END:02d}:00, Pi only)")
+
+    print(f"\nEnergy")
+    print(f"  Daily                 {r['kwh_daily']:>6.3f} kWh")
+    print(f"  Monthly (~30 days)    {r['kwh_monthly']:>6.2f} kWh")
+    print(f"  Yearly  (~365 days)   {r['kwh_yearly']:>6.1f} kWh")
+
+    print(f"\nCost  (@ {CURRENCY}{COST_PER_KWH:.2f}/kWh)")
+    print(f"  Daily                 {CURRENCY}{r['cost_daily']:>5.2f}")
+    print(f"  Monthly               {CURRENCY}{r['cost_monthly']:>5.2f}")
+    print(f"  Yearly                {CURRENCY}{r['cost_yearly']:>6.2f}")
+    print("=" * 44)
+
+
+if __name__ == "__main__":
+    report()
