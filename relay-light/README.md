@@ -144,17 +144,27 @@ Press `Ctrl+C` to stop. Light restores to ON; fans turn OFF on exit.
 
 ## Make targets
 
-| Target          | Description                        |
-|-----------------|------------------------------------|
-| `make run`      | Run in foreground                  |
-| `make start`    | Run in background (logs to file)   |
-| `make stop`     | Stop background process            |
-| `make status`   | Show if running                    |
-| `make logs`     | Tail the log file                  |
-| `make temp`     | One-shot sensor read               |
-| `make diag`     | Raw GPIO diagnostic                |
-| `make power`    | Power & cost report                |
-| `make test`     | Run unit tests                     |
+| Target             | Description                              |
+|--------------------|------------------------------------------|
+| `make run`         | Run in foreground                        |
+| `make start`       | Run in background (logs to file)         |
+| `make stop`        | Stop background process                  |
+| `make restart`     | Stop then start                          |
+| `make status`      | Show if running                          |
+| `make logs`        | Tail the log file                        |
+| `make temp`        | One-shot sensor read                     |
+| `make diag`        | Raw GPIO diagnostic                      |
+| `make power`       | Power & cost report                      |
+| `make test`        | Run unit tests                           |
+| `make light-on`    | Turn light ON  (manual override)         |
+| `make light-off`   | Turn light OFF (manual override)         |
+| `make light-auto`  | Return light to time schedule            |
+| `make fan-on`      | Turn fans ON   (manual override)         |
+| `make fan-off`     | Turn fans OFF  (manual override)         |
+| `make fan-auto`    | Return fans to temperature control       |
+
+Manual commands take effect immediately. The service must be running.
+Use `light-auto` / `fan-auto` to hand control back to the schedule/sensor.
 
 ## Configuration
 

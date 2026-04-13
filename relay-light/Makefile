@@ -1,11 +1,16 @@
 PYTHON   := python3
 PID_FILE := /tmp/relay-light.pid
 LOG_FILE := /tmp/relay-light.log
+CMD_FIFO := /tmp/relay-light.cmd
 SERVICE  := relay-light
 
 .PHONY: install run start stop restart status logs diag power temp test clean \
+        light-on light-off light-auto fan-on fan-off fan-auto \
         service-install service-uninstall service-start service-stop \
         service-restart service-status service-logs
+
+_cmd_check:
+	@test -p $(CMD_FIFO) || (echo "Service not running (no command FIFO found)"; exit 1)
 
 # ── Python ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +52,26 @@ power:
 
 temp:
 	$(PYTHON) temp_sensor.py
+
+# ── Manual control ────────────────────────────────────────────────────────────
+
+light-on:   _cmd_check
+	@echo "light on"   > $(CMD_FIFO) && echo "Light ON"
+
+light-off:  _cmd_check
+	@echo "light off"  > $(CMD_FIFO) && echo "Light OFF"
+
+light-auto: _cmd_check
+	@echo "light auto" > $(CMD_FIFO) && echo "Light → auto (schedule)"
+
+fan-on:     _cmd_check
+	@echo "fan on"     > $(CMD_FIFO) && echo "Fan ON"
+
+fan-off:    _cmd_check
+	@echo "fan off"    > $(CMD_FIFO) && echo "Fan OFF"
+
+fan-auto:   _cmd_check
+	@echo "fan auto"   > $(CMD_FIFO) && echo "Fan → auto (temp-triggered)"
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v
