@@ -1,9 +1,11 @@
 # relay-light
 
-Controls a 100W mains light via a 1-channel relay on a Raspberry Pi 4B.
+Controls a 100W mains light and cooling fans via relays on a Raspberry Pi 4B.
 Reads temperature and humidity from a DHT22 sensor every 60 seconds.
 
-## Schedule
+## Behaviour
+
+**Light** — time-scheduled:
 
 | Time          | State |
 |---------------|-------|
@@ -13,12 +15,22 @@ Reads temperature and humidity from a DHT22 sensor every 60 seconds.
 
 Power loss defaults to ON (relay de-energized, NO contact open).
 
+**Fans** — temperature-triggered:
+
+| Condition       | Action   |
+|-----------------|----------|
+| Temp ≥ 28 °C   | Fans ON  |
+| Temp ≤ 25 °C   | Fans OFF |
+
+Hysteresis prevents rapid cycling between thresholds.
+
 ## Hardware
 
 - Raspberry Pi 4B
-- 1-channel 5V relay module (active LOW, NO terminal)
+- 2× 1-channel 5V relay module (active LOW, NO terminal)
 - DHT22 (AM2302) temperature & humidity sensor + 10 kΩ pull-up resistor
 - 100W mains light
+- Cooling fans
 
 ## Wiring
 
@@ -26,28 +38,40 @@ Power loss defaults to ON (relay de-energized, NO contact open).
 
 ```
  Raspberry Pi 4B
- ┌──────────────────────────────────────────────────────────┐
- │                                                          │
- │  Pin  1   3.3V  ────────────────────────────┬───────────┼──► Relay VCC
- │                                             ├───────────┼──► DHT22 pin 1 (VCC)
- │                                             └──[10 kΩ]──┼──► DHT22 pin 2 (DATA)
- │  Pin  6   GND   ────────────────────────────┬───────────┼──► Relay GND
- │                                             └───────────┼──► DHT22 pin 4 (GND)
- │  Pin  7   GPIO4  (BCM)  ────────────────────────────────┼──► DHT22 pin 2 (DATA)
- │  Pin 11   GPIO17 (BCM)  ────────────────────────────────┼──► Relay IN
- │                                                          │
- └──────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────┐
+ │                                                              │
+ │  Pin  1   3.3V  ──────────────────────────┬─────────────────┼──► Light relay VCC
+ │                                           ├─────────────────┼──► Fan relay VCC
+ │                                           ├─────────────────┼──► DHT22 pin 1 (VCC)
+ │                                           └──[10 kΩ]────────┼──► DHT22 pin 2 (DATA)
+ │  Pin  6   GND   ──────────────────────────┬─────────────────┼──► Light relay GND
+ │                                           ├─────────────────┼──► Fan relay GND
+ │                                           └─────────────────┼──► DHT22 pin 4 (GND)
+ │  Pin  7   GPIO4  (BCM)  ─────────────────────────────────────┼──► DHT22 pin 2 (DATA)
+ │  Pin 11   GPIO17 (BCM)  ─────────────────────────────────────┼──► Light relay IN
+ │  Pin 13   GPIO27 (BCM)  ─────────────────────────────────────┼──► Fan relay IN
+ │                                                              │
+ └──────────────────────────────────────────────────────────────┘
 
- Relay load side (mains voltage — de-power before touching)
+ Light relay — load side (mains voltage, de-power before touching)
 
    Mains Live ────► COM
                     NO ──────────────────────────────────► Light (live terminal)
    Mains Neutral ───────────────────────────────────────► Light (neutral terminal)
+
+ Fan relay — load side
+
+   Fan V+ ────► COM
+                NO ──────────────────────────────────────► Fan V+ (switched)
+   Fan GND  ───────────────────────────────────────────► Fan GND
 ```
+
+> **Warning:** The light relay load side carries mains voltage (120V/240V AC).
+> De-power before wiring.
 
 ---
 
-### Relay module
+### Light relay
 
 | Relay Pin | Pi Pin       | BCM    |
 |-----------|--------------|--------|
@@ -55,14 +79,21 @@ Power loss defaults to ON (relay de-energized, NO contact open).
 | GND       | Pin 6        | —      |
 | IN        | Pin 11       | GPIO17 |
 
-> Use Pin 1 (3.3V), not Pin 2/4 (5V). At 5V the optocoupler stays partially on
-> and the relay never de-energizes.
->
-> **JD-VCC modules:** remove the jumper, wire JD-VCC to Pin 2 (5V) and VCC to Pin 1 (3.3V).
-> This runs the coil on 5V while keeping the signal side on 3.3V logic.
+---
 
-> **Warning:** The load side carries mains voltage (120V/240V AC). Ensure all connections
-> are insulated and the circuit is de-powered before wiring.
+### Fan relay
+
+| Relay Pin | Pi Pin       | BCM    |
+|-----------|--------------|--------|
+| VCC       | Pin 1 (3.3V) | —      |
+| GND       | Pin 6        | —      |
+| IN        | Pin 13       | GPIO27 |
+
+> Use Pin 1 (3.3V) for relay VCC on both modules, not Pin 2/4 (5V). At 5V the
+> optocoupler stays partially on and the relay never fully de-energizes.
+>
+> **JD-VCC modules:** remove the jumper, wire JD-VCC to Pin 2 (5V) and VCC to
+> Pin 1 (3.3V). This runs the coil on 5V while keeping signal logic at 3.3V.
 
 ---
 
@@ -109,7 +140,7 @@ pip install -r requirements.txt
 python3 main.py
 ```
 
-Press `Ctrl+C` to stop. The light is restored to ON on exit.
+Press `Ctrl+C` to stop. Light restores to ON; fans turn OFF on exit.
 
 ## Make targets
 
@@ -131,12 +162,15 @@ Edit `main.py`:
 
 | Variable         | Default | Description                           |
 |------------------|---------|---------------------------------------|
-| `RELAY_GPIO_PIN` | `17`    | BCM GPIO pin connected to relay IN    |
+| `RELAY_GPIO_PIN` | `17`    | BCM GPIO pin — light relay IN         |
+| `FAN_GPIO_PIN`   | `27`    | BCM GPIO pin — fan relay IN           |
 | `OFF_START`      | `12`    | Hour (24h) when light turns OFF       |
 | `OFF_END`        | `18`    | Hour (24h) when light turns back ON   |
 | `CHECK_INTERVAL` | `30`    | Seconds between schedule checks       |
-| `TEMP_GPIO_PIN`  | `4`     | BCM GPIO pin connected to DHT22 DATA  |
+| `TEMP_GPIO_PIN`  | `4`     | BCM GPIO pin — DHT22 DATA             |
 | `TEMP_INTERVAL`  | `60`    | Seconds between temperature log lines |
+| `FAN_TEMP_ON`    | `28.0`  | °C threshold to turn fans ON          |
+| `FAN_TEMP_OFF`   | `25.0`  | °C threshold to turn fans OFF         |
 
 ## Run on boot (systemd)
 
@@ -157,7 +191,7 @@ crontab -e
 
 ```
 relay-light/
-├── main.py          # Schedule loop + temp logging
+├── main.py          # Schedule + fan + temp logging loop
 ├── relay.py         # Relay GPIO control
 ├── temp_sensor.py   # DHT22 sensor wrapper
 ├── power.py         # Power & cost calculator
