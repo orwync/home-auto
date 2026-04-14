@@ -15,6 +15,7 @@ import time
 from datetime import datetime
 from relay import Relay
 from temp_sensor import TempSensor
+from display import Display
 
 RELAY_GPIO_PIN = 17   # BCM GPIO17 = physical pin 11  — light relay
 FAN_GPIO_PIN   = 27   # BCM GPIO27 = physical pin 13  — fan relay
@@ -83,6 +84,7 @@ def main():
     light    = Relay(pin=RELAY_GPIO_PIN, active_low=True, contact='NO')
     fan      = Relay(pin=FAN_GPIO_PIN,   active_low=True, contact='NO')
     sensor   = TempSensor(gpio_pin=TEMP_GPIO_PIN)
+    display  = Display()
     fifo_fd  = _open_fifo()
     overrides = {'light': None, 'fan': None}  # None = auto; True/False = manual
 
@@ -93,6 +95,7 @@ def main():
         light.cleanup()
         fan.cleanup()
         sensor.cleanup()
+        display.cleanup()
         os.close(fifo_fd)
         sys.exit(0)
 
@@ -143,6 +146,8 @@ def main():
                         print(f"[{ts}] Fan OFF ({temp:.1f}°C <= {FAN_TEMP_OFF}°C)")
             else:
                 print(f"[{ts}] Temp read failed (will retry)")
+            light_on = overrides['light'] if overrides['light'] is not None else last_light_state
+            display.update(temp, hum, bool(light_on), fan_on)
             last_temp_log = time.monotonic()
 
         # ── Wait for next cycle, wake immediately on incoming command ───────────
