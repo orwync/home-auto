@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 import RPi.GPIO as GPIO
 
 
@@ -21,12 +23,11 @@ class Switches:
       Fan:     ON → GPIO24 (pin 18)  OFF → GPIO25 (pin 22)
       Service:       GPIO26 (pin 37)
 
-    Edge detection wakes the main loop immediately on any switch change.
-    Add self.fileno to the select() call to benefit from this.
+    A background thread polls pins every 50 ms and writes to a pipe when any
+    pin changes. Add self.fileno to the main select() to wake immediately.
     """
 
-    # 50 ms debounce — enough for mechanical toggles, not so long it feels laggy
-    _BOUNCETIME_MS = 50
+    _POLL_INTERVAL = 0.05   # seconds (50 ms)
 
     def __init__(
         self,
@@ -43,25 +44,29 @@ class Switches:
         self._service   = service_pin
         self._pins = [light_on_pin, light_off_pin, fan_on_pin, fan_off_pin, service_pin]
 
-        self._pipe_r, self._pipe_w = os.pipe()
-
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
         for pin in self._pins:
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.remove_event_detect(pin)   # clear any stale registration from a prior run
-            GPIO.add_event_detect(
-                pin, GPIO.BOTH,
-                callback=self._notify,
-                bouncetime=self._BOUNCETIME_MS,
-            )
 
-    def _notify(self, _channel: int) -> None:
-        """GPIO callback — writes a byte to the pipe to wake the main select()."""
-        try:
-            os.write(self._pipe_w, b'\x00')
-        except OSError:
-            pass
+        self._pipe_r, self._pipe_w = os.pipe()
+        self._prev  = {pin: GPIO.input(pin) for pin in self._pins}
+        self._stop  = threading.Event()
+        self._thread = threading.Thread(target=self._poll, daemon=True)
+        self._thread.start()
+
+    def _poll(self) -> None:
+        """Background thread — wakes the main loop when any pin changes."""
+        while not self._stop.is_set():
+            for pin in self._pins:
+                val = GPIO.input(pin)
+                if val != self._prev[pin]:
+                    self._prev[pin] = val
+                    try:
+                        os.write(self._pipe_w, b'\x00')
+                    except OSError:
+                        pass
+            time.sleep(self._POLL_INTERVAL)
 
     @property
     def fileno(self) -> int:
@@ -89,8 +94,8 @@ class Switches:
         return bool(GPIO.input(self._service))
 
     def cleanup(self):
-        for pin in self._pins:
-            GPIO.remove_event_detect(pin)
+        self._stop.set()
+        self._thread.join()
         os.close(self._pipe_r)
         os.close(self._pipe_w)
         GPIO.cleanup(self._pins)
