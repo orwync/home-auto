@@ -138,9 +138,11 @@ def main():
                 fan.off()
                 last_light_state = None   # force re-evaluate on resume
                 service_was_running = False
-            ready, _, _ = select.select([fifo_fd], [], [], CHECK_INTERVAL)
-            if ready:
-                os.read(fifo_fd, 256)     # drain FIFO while paused
+            ready, _, _ = select.select([fifo_fd, sw.fileno], [], [], CHECK_INTERVAL)
+            if sw.fileno in ready:
+                os.read(sw.fileno, 64)   # drain wakeup bytes
+            if fifo_fd in ready:
+                os.read(fifo_fd, 256)    # drain FIFO while paused
             continue
 
         if not service_was_running:
@@ -208,9 +210,11 @@ def main():
                 fan_on = False
                 print(f"[{ts}] Fan OFF ({last_temp:.1f}°C <= {FAN_TEMP_OFF}°C)")
 
-        # ── Wait for next cycle, wake immediately on incoming command ───────────
-        ready, _, _ = select.select([fifo_fd], [], [], CHECK_INTERVAL)
-        if ready:
+        # ── Wait for next cycle; wake immediately on switch change or command ────
+        ready, _, _ = select.select([fifo_fd, sw.fileno], [], [], CHECK_INTERVAL)
+        if sw.fileno in ready:
+            os.read(sw.fileno, 64)   # drain wakeup bytes
+        if fifo_fd in ready:
             data = os.read(fifo_fd, 256).decode(errors='replace').strip()
             for line in data.splitlines():
                 if line:

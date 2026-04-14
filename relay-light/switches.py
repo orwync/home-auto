@@ -1,3 +1,4 @@
+import os
 import RPi.GPIO as GPIO
 
 
@@ -19,7 +20,13 @@ class Switches:
       Light:   ON → GPIO22 (pin 15)  OFF → GPIO23 (pin 16)
       Fan:     ON → GPIO24 (pin 18)  OFF → GPIO25 (pin 22)
       Service:       GPIO26 (pin 37)
+
+    Edge detection wakes the main loop immediately on any switch change.
+    Add self.fileno to the select() call to benefit from this.
     """
+
+    # 50 ms debounce — enough for mechanical toggles, not so long it feels laggy
+    _BOUNCETIME_MS = 50
 
     def __init__(
         self,
@@ -36,10 +43,29 @@ class Switches:
         self._service   = service_pin
         self._pins = [light_on_pin, light_off_pin, fan_on_pin, fan_off_pin, service_pin]
 
+        self._pipe_r, self._pipe_w = os.pipe()
+
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
         for pin in self._pins:
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            GPIO.add_event_detect(
+                pin, GPIO.BOTH,
+                callback=self._notify,
+                bouncetime=self._BOUNCETIME_MS,
+            )
+
+    def _notify(self, _channel: int) -> None:
+        """GPIO callback — writes a byte to the pipe to wake the main select()."""
+        try:
+            os.write(self._pipe_w, b'\x00')
+        except OSError:
+            pass
+
+    @property
+    def fileno(self) -> int:
+        """Read end of the wakeup pipe — becomes readable when any switch changes."""
+        return self._pipe_r
 
     def light(self) -> str:
         """Return 'on', 'off', or 'auto'."""
@@ -62,4 +88,8 @@ class Switches:
         return bool(GPIO.input(self._service))
 
     def cleanup(self):
+        for pin in self._pins:
+            GPIO.remove_event_detect(pin)
+        os.close(self._pipe_r)
+        os.close(self._pipe_w)
         GPIO.cleanup(self._pins)
