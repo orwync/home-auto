@@ -51,6 +51,9 @@ class Switches:
 
         self._pipe_r, self._pipe_w = os.pipe()
         self._prev  = {pin: GPIO.input(pin) for pin in self._pins}
+        print(f"[SW] Initial pin states: light_on={GPIO.input(light_on_pin)} light_off={GPIO.input(light_off_pin)}"
+              f" fan_on={GPIO.input(fan_on_pin)} fan_off={GPIO.input(fan_off_pin)} service={GPIO.input(service_pin)}"
+              f"  (0=LOW/active, 1=HIGH/inactive)")
         self._stop  = threading.Event()
         self._thread = threading.Thread(target=self._poll, daemon=True)
         self._thread.start()
@@ -61,6 +64,7 @@ class Switches:
             for pin in self._pins:
                 val = GPIO.input(pin)
                 if val != self._prev[pin]:
+                    print(f"[SW] GPIO{pin} changed: {'HIGH' if self._prev[pin] else 'LOW'} → {'HIGH' if val else 'LOW'}")
                     self._prev[pin] = val
                     try:
                         os.write(self._pipe_w, b'\x00')
