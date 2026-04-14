@@ -4,7 +4,9 @@ Relay light controller — Raspberry Pi 4B
 - Light: time-scheduled ON 00:00–12:00 and 18:00–00:00, OFF 12:00–18:00
 - Fans:  temperature-triggered, ON above FAN_TEMP_ON, OFF below FAN_TEMP_OFF
 - DHT22 temp/humidity logged every TEMP_INTERVAL seconds
+- Physical switches: light (on/off/auto), fan (on/off/auto), service (run/stop)
 - Manual control via FIFO: echo "light on|off|auto" or "fan on|off|auto" > CMD_FIFO
+  (switch position overrides FIFO when not in AUTO)
 """
 
 import os
@@ -15,10 +17,18 @@ import time
 from datetime import datetime
 from relay import Relay
 from temp_sensor import TempSensor
+from switches import Switches
 
 RELAY_GPIO_PIN = 17   # BCM GPIO17 = physical pin 11  — light relay
 FAN_GPIO_PIN   = 27   # BCM GPIO27 = physical pin 13  — fan relay
 TEMP_GPIO_PIN  = 4    # BCM GPIO4  = physical pin 7   — DHT22
+
+# Physical switch GPIO pins (BCM)
+SW_LIGHT_ON  = 22   # physical pin 15
+SW_LIGHT_OFF = 23   # physical pin 16
+SW_FAN_ON    = 24   # physical pin 18
+SW_FAN_OFF   = 25   # physical pin 22
+SW_SERVICE   = 26   # physical pin 37  — HIGH = run, LOW = stop
 
 CHECK_INTERVAL = 30   # seconds between schedule checks
 TEMP_INTERVAL  = 60   # seconds between temperature readings
@@ -83,6 +93,7 @@ def main():
     light    = Relay(pin=RELAY_GPIO_PIN, active_low=True, contact='NO')
     fan      = Relay(pin=FAN_GPIO_PIN,   active_low=True, contact='NO')
     sensor   = TempSensor(gpio_pin=TEMP_GPIO_PIN)
+    sw       = Switches(SW_LIGHT_ON, SW_LIGHT_OFF, SW_FAN_ON, SW_FAN_OFF, SW_SERVICE)
     fifo_fd  = _open_fifo()
     overrides = {'light': None, 'fan': None}  # None = auto; True/False = manual
 
@@ -93,6 +104,7 @@ def main():
         light.cleanup()
         fan.cleanup()
         sensor.cleanup()
+        sw.cleanup()
         os.close(fifo_fd)
         sys.exit(0)
 
@@ -102,29 +114,62 @@ def main():
     print(f"Light relay  GPIO{RELAY_GPIO_PIN} | Fan relay GPIO{FAN_GPIO_PIN} | Sensor GPIO{TEMP_GPIO_PIN}")
     print(f"Light schedule: ON 00:00–{OFF_START:02d}:00 and {OFF_END:02d}:00–00:00 | OFF {OFF_START:02d}:00–{OFF_END:02d}:00")
     print(f"Fan thresholds: ON >{FAN_TEMP_ON}°C  OFF <{FAN_TEMP_OFF}°C")
+    print(f"Switches: light GPIO{SW_LIGHT_ON}/{SW_LIGHT_OFF}  fan GPIO{SW_FAN_ON}/{SW_FAN_OFF}  service GPIO{SW_SERVICE}")
     print(f"Commands: echo 'light on|off|auto' > {CMD_FIFO}")
     print(f"          echo 'fan   on|off|auto' > {CMD_FIFO}\n")
 
     last_light_state = None
     fan_on           = False
     last_temp_log    = 0.0
+    service_was_running = True
 
     while True:
         now = datetime.now()
+        ts  = now.strftime('%H:%M:%S')
 
-        # ── Light ──────────────────────────────────────────────────────────────
-        if overrides['light'] is None:
-            desired = light_should_be_on()
-            if desired != last_light_state:
-                if desired:
-                    light.on()
-                    print(f"[{now.strftime('%H:%M:%S')}] Light ON")
-                else:
-                    light.off()
-                    print(f"[{now.strftime('%H:%M:%S')}] Light OFF")
-                last_light_state = desired
+        # ── Service switch ─────────────────────────────────────────────────────
+        if not sw.service_running():
+            if service_was_running:
+                print(f"[{ts}] [SW] Service STOPPED — relays to safe defaults")
+                light.on()
+                fan.off()
+                last_light_state = None   # force re-evaluate on resume
+                service_was_running = False
+            ready, _, _ = select.select([fifo_fd], [], [], CHECK_INTERVAL)
+            if ready:
+                os.read(fifo_fd, 256)     # drain FIFO while paused
+            continue
+
+        if not service_was_running:
+            print(f"[{ts}] [SW] Service RUNNING — resuming control")
+            service_was_running = True
+
+        # ── Resolve effective light mode (switch > FIFO override > schedule) ───
+        sw_light = sw.light()
+        if sw_light == 'on':
+            if last_light_state is not True:
+                light.on()
+                print(f"[{ts}] [SW] Light ON")
+                last_light_state = True
+        elif sw_light == 'off':
+            if last_light_state is not False:
+                light.off()
+                print(f"[{ts}] [SW] Light OFF")
+                last_light_state = False
         else:
-            last_light_state = overrides['light']
+            # AUTO — respect FIFO override, then schedule
+            if overrides['light'] is None:
+                desired = light_should_be_on()
+                if desired != last_light_state:
+                    if desired:
+                        light.on()
+                        print(f"[{ts}] Light ON")
+                    else:
+                        light.off()
+                        print(f"[{ts}] Light OFF")
+                    last_light_state = desired
+            else:
+                last_light_state = overrides['light']
 
         # ── Temperature & fans ─────────────────────────────────────────────────
         if time.monotonic() - last_temp_log >= TEMP_INTERVAL:
@@ -132,18 +177,31 @@ def main():
             ts = datetime.now().strftime('%H:%M:%S')
             if temp is not None:
                 print(f"[{ts}] Temp {temp:.1f}°C  Humidity {hum:.1f}%")
-                if overrides['fan'] is None:
-                    if not fan_on and temp >= FAN_TEMP_ON:
-                        fan.on()
-                        fan_on = True
-                        print(f"[{ts}] Fan ON  ({temp:.1f}°C >= {FAN_TEMP_ON}°C)")
-                    elif fan_on and temp <= FAN_TEMP_OFF:
-                        fan.off()
-                        fan_on = False
-                        print(f"[{ts}] Fan OFF ({temp:.1f}°C <= {FAN_TEMP_OFF}°C)")
             else:
                 print(f"[{ts}] Temp read failed (will retry)")
             last_temp_log = time.monotonic()
+
+            # Resolve effective fan mode (switch > FIFO override > temp)
+            sw_fan = sw.fan()
+            if sw_fan == 'on':
+                if not fan_on:
+                    fan.on()
+                    fan_on = True
+                    print(f"[{ts}] [SW] Fan ON")
+            elif sw_fan == 'off':
+                if fan_on:
+                    fan.off()
+                    fan_on = False
+                    print(f"[{ts}] [SW] Fan OFF")
+            elif temp is not None and overrides['fan'] is None:
+                if not fan_on and temp >= FAN_TEMP_ON:
+                    fan.on()
+                    fan_on = True
+                    print(f"[{ts}] Fan ON  ({temp:.1f}°C >= {FAN_TEMP_ON}°C)")
+                elif fan_on and temp <= FAN_TEMP_OFF:
+                    fan.off()
+                    fan_on = False
+                    print(f"[{ts}] Fan OFF ({temp:.1f}°C <= {FAN_TEMP_OFF}°C)")
 
         # ── Wait for next cycle, wake immediately on incoming command ───────────
         ready, _, _ = select.select([fifo_fd], [], [], CHECK_INTERVAL)
