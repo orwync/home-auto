@@ -49,6 +49,7 @@ class Switches:
         GPIO.setwarnings(False)
         for pin in self._pins:
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            GPIO.remove_event_detect(pin)   # clear any stale registration from a prior run
             GPIO.add_event_detect(
                 pin, GPIO.BOTH,
                 callback=self._notify,
