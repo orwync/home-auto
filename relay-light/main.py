@@ -118,10 +118,13 @@ def main():
     print(f"Commands: echo 'light on|off|auto' > {CMD_FIFO}")
     print(f"          echo 'fan   on|off|auto' > {CMD_FIFO}\n")
 
-    last_light_state = None
-    fan_on           = False
-    last_temp_log    = 0.0
+    last_light_state    = None
+    fan_on              = False
+    last_temp_log       = 0.0
+    last_temp           = None
     service_was_running = True
+    prev_sw_light       = None   # tracks last logged switch position
+    prev_sw_fan         = None
 
     while True:
         now = datetime.now()
@@ -130,7 +133,7 @@ def main():
         # ── Service switch ─────────────────────────────────────────────────────
         if not sw.service_running():
             if service_was_running:
-                print(f"[{ts}] [SW] Service STOPPED — relays to safe defaults")
+                print(f"[{ts}] [SW] Service switch → STOP — relays to safe defaults")
                 light.on()
                 fan.off()
                 last_light_state = None   # force re-evaluate on resume
@@ -141,67 +144,69 @@ def main():
             continue
 
         if not service_was_running:
-            print(f"[{ts}] [SW] Service RUNNING — resuming control")
+            print(f"[{ts}] [SW] Service switch → RUN — resuming control")
             service_was_running = True
 
-        # ── Resolve effective light mode (switch > FIFO override > schedule) ───
+        # ── Light switch (checked every cycle) ────────────────────────────────
         sw_light = sw.light()
+        if sw_light != prev_sw_light:
+            print(f"[{ts}] [SW] Light switch → {sw_light.upper()}")
+            prev_sw_light = sw_light
+
         if sw_light == 'on':
             if last_light_state is not True:
                 light.on()
-                print(f"[{ts}] [SW] Light ON")
                 last_light_state = True
         elif sw_light == 'off':
             if last_light_state is not False:
                 light.off()
-                print(f"[{ts}] [SW] Light OFF")
                 last_light_state = False
         else:
             # AUTO — respect FIFO override, then schedule
             if overrides['light'] is None:
                 desired = light_should_be_on()
                 if desired != last_light_state:
-                    if desired:
-                        light.on()
-                        print(f"[{ts}] Light ON")
-                    else:
-                        light.off()
-                        print(f"[{ts}] Light OFF")
+                    light.on() if desired else light.off()
+                    print(f"[{ts}] Light {'ON' if desired else 'OFF'} (schedule)")
                     last_light_state = desired
             else:
                 last_light_state = overrides['light']
 
-        # ── Temperature & fans ─────────────────────────────────────────────────
+        # ── Fan switch (checked every cycle) ──────────────────────────────────
+        sw_fan = sw.fan()
+        if sw_fan != prev_sw_fan:
+            print(f"[{ts}] [SW] Fan switch → {sw_fan.upper()}")
+            prev_sw_fan = sw_fan
+
+        if sw_fan == 'on':
+            if not fan_on:
+                fan.on()
+                fan_on = True
+        elif sw_fan == 'off':
+            if fan_on:
+                fan.off()
+                fan_on = False
+
+        # ── Temperature (logged on interval; AUTO fan control uses last reading)
         if time.monotonic() - last_temp_log >= TEMP_INTERVAL:
             temp, hum = sensor.read()
             ts = datetime.now().strftime('%H:%M:%S')
             if temp is not None:
+                last_temp = temp
                 print(f"[{ts}] Temp {temp:.1f}°C  Humidity {hum:.1f}%")
             else:
                 print(f"[{ts}] Temp read failed (will retry)")
             last_temp_log = time.monotonic()
 
-            # Resolve effective fan mode (switch > FIFO override > temp)
-            sw_fan = sw.fan()
-            if sw_fan == 'on':
-                if not fan_on:
-                    fan.on()
-                    fan_on = True
-                    print(f"[{ts}] [SW] Fan ON")
-            elif sw_fan == 'off':
-                if fan_on:
-                    fan.off()
-                    fan_on = False
-                    print(f"[{ts}] [SW] Fan OFF")
-            elif temp is not None and overrides['fan'] is None:
-                if not fan_on and temp >= FAN_TEMP_ON:
-                    fan.on()
-                    fan_on = True
-                    print(f"[{ts}] Fan ON  ({temp:.1f}°C >= {FAN_TEMP_ON}°C)")
-                elif fan_on and temp <= FAN_TEMP_OFF:
-                    fan.off()
-                    fan_on = False
-                    print(f"[{ts}] Fan OFF ({temp:.1f}°C <= {FAN_TEMP_OFF}°C)")
+        if sw_fan == 'auto' and last_temp is not None and overrides['fan'] is None:
+            if not fan_on and last_temp >= FAN_TEMP_ON:
+                fan.on()
+                fan_on = True
+                print(f"[{ts}] Fan ON  ({last_temp:.1f}°C >= {FAN_TEMP_ON}°C)")
+            elif fan_on and last_temp <= FAN_TEMP_OFF:
+                fan.off()
+                fan_on = False
+                print(f"[{ts}] Fan OFF ({last_temp:.1f}°C <= {FAN_TEMP_OFF}°C)")
 
         # ── Wait for next cycle, wake immediately on incoming command ───────────
         ready, _, _ = select.select([fifo_fd], [], [], CHECK_INTERVAL)
