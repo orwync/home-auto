@@ -6,7 +6,7 @@ import RPi.GPIO as GPIO
 
 class Switches:
     """
-    Physical toggle switches for light, fan, and service control.
+    Physical toggle switches for light and fan control.
 
     Light / fan — 3-position toggle (e.g. centre-off toggle switch):
       Common → GND
@@ -14,14 +14,9 @@ class Switches:
       Pin B  → GPIO (pull-up): LOW = OFF position
       Both HIGH (centre) = AUTO
 
-    Service — 2-position toggle:
-      Common → GND
-      Pin    → GPIO (pull-up): HIGH = running, LOW = stopped
-
     Default GPIO assignments (BCM):
       Light:   ON → GPIO22 (pin 15)  OFF → GPIO23 (pin 16)
       Fan:     ON → GPIO24 (pin 18)  OFF → GPIO25 (pin 22)
-      Service:       GPIO26 (pin 37)
 
     A background thread polls pins every 50 ms and writes to a pipe when any
     pin changes. Add self.fileno to the main select() to wake immediately.
@@ -35,14 +30,12 @@ class Switches:
         light_off_pin: int = 23,
         fan_on_pin:    int = 24,
         fan_off_pin:   int = 25,
-        service_pin:   int = 26,
     ):
         self._light_on  = light_on_pin
         self._light_off = light_off_pin
         self._fan_on    = fan_on_pin
         self._fan_off   = fan_off_pin
-        self._service   = service_pin
-        self._pins = [light_on_pin, light_off_pin, fan_on_pin, fan_off_pin, service_pin]
+        self._pins = [light_on_pin, light_off_pin, fan_on_pin, fan_off_pin]
 
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
@@ -52,7 +45,7 @@ class Switches:
         self._pipe_r, self._pipe_w = os.pipe()
         self._prev  = {pin: GPIO.input(pin) for pin in self._pins}
         print(f"[SW] Initial pin states: light_on={GPIO.input(light_on_pin)} light_off={GPIO.input(light_off_pin)}"
-              f" fan_on={GPIO.input(fan_on_pin)} fan_off={GPIO.input(fan_off_pin)} service={GPIO.input(service_pin)}"
+              f" fan_on={GPIO.input(fan_on_pin)} fan_off={GPIO.input(fan_off_pin)}"
               f"  (0=LOW/active, 1=HIGH/inactive)")
         self._stop  = threading.Event()
         self._thread = threading.Thread(target=self._poll, daemon=True)
@@ -92,10 +85,6 @@ class Switches:
         if not GPIO.input(self._fan_off):
             return 'off'
         return 'auto'
-
-    def service_running(self) -> bool:
-        """Return True when the service switch is in the RUN position."""
-        return bool(GPIO.input(self._service))
 
     def cleanup(self):
         self._stop.set()

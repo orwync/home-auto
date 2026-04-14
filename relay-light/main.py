@@ -28,7 +28,6 @@ SW_LIGHT_ON  = 22   # physical pin 15
 SW_LIGHT_OFF = 23   # physical pin 16
 SW_FAN_ON    = 24   # physical pin 18
 SW_FAN_OFF   = 25   # physical pin 22
-SW_SERVICE   = 26   # physical pin 37  — HIGH = run, LOW = stop
 
 CHECK_INTERVAL = 30   # seconds between schedule checks
 TEMP_INTERVAL  = 60   # seconds between temperature readings
@@ -93,7 +92,7 @@ def main():
     light    = Relay(pin=RELAY_GPIO_PIN, active_low=True, contact='NO')
     fan      = Relay(pin=FAN_GPIO_PIN,   active_low=True, contact='NO')
     sensor   = TempSensor(gpio_pin=TEMP_GPIO_PIN)
-    sw       = Switches(SW_LIGHT_ON, SW_LIGHT_OFF, SW_FAN_ON, SW_FAN_OFF, SW_SERVICE)
+    sw       = Switches(SW_LIGHT_ON, SW_LIGHT_OFF, SW_FAN_ON, SW_FAN_OFF)
     fifo_fd  = _open_fifo()
     overrides = {'light': None, 'fan': None}  # None = auto; True/False = manual
 
@@ -114,40 +113,20 @@ def main():
     print(f"Light relay  GPIO{RELAY_GPIO_PIN} | Fan relay GPIO{FAN_GPIO_PIN} | Sensor GPIO{TEMP_GPIO_PIN}")
     print(f"Light schedule: ON 00:00–{OFF_START:02d}:00 and {OFF_END:02d}:00–00:00 | OFF {OFF_START:02d}:00–{OFF_END:02d}:00")
     print(f"Fan thresholds: ON >{FAN_TEMP_ON}°C  OFF <{FAN_TEMP_OFF}°C")
-    print(f"Switches: light GPIO{SW_LIGHT_ON}/{SW_LIGHT_OFF}  fan GPIO{SW_FAN_ON}/{SW_FAN_OFF}  service GPIO{SW_SERVICE}")
+    print(f"Switches: light GPIO{SW_LIGHT_ON}/{SW_LIGHT_OFF}  fan GPIO{SW_FAN_ON}/{SW_FAN_OFF}")
     print(f"Commands: echo 'light on|off|auto' > {CMD_FIFO}")
     print(f"          echo 'fan   on|off|auto' > {CMD_FIFO}\n")
 
-    last_light_state    = None
-    fan_on              = False
-    last_temp_log       = 0.0
-    last_temp           = None
-    service_was_running = True
-    prev_sw_light       = None   # tracks last logged switch position
-    prev_sw_fan         = None
+    last_light_state = None
+    fan_on           = False
+    last_temp_log    = 0.0
+    last_temp        = None
+    prev_sw_light    = None   # tracks last logged switch position
+    prev_sw_fan      = None
 
     while True:
         now = datetime.now()
         ts  = now.strftime('%H:%M:%S')
-
-        # ── Service switch ─────────────────────────────────────────────────────
-        if not sw.service_running():
-            if service_was_running:
-                print(f"[{ts}] [SW] Service switch → STOP — relays to safe defaults")
-                light.on()
-                fan.off()
-                last_light_state = None   # force re-evaluate on resume
-                service_was_running = False
-            ready, _, _ = select.select([fifo_fd, sw.fileno], [], [], CHECK_INTERVAL)
-            if sw.fileno in ready:
-                os.read(sw.fileno, 64)   # drain wakeup bytes
-            if fifo_fd in ready:
-                os.read(fifo_fd, 256)    # drain FIFO while paused
-            continue
-
-        if not service_was_running:
-            print(f"[{ts}] [SW] Service switch → RUN — resuming control")
-            service_was_running = True
 
         # ── Light switch (checked every cycle) ────────────────────────────────
         sw_light = sw.light()
