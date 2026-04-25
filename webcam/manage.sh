@@ -30,17 +30,26 @@ require_sudo() {
 case "$1" in
     install)
         require_sudo install
-        # Generate service file with correct paths and .env support
+        # Load .env so values are resolved at install time
+        if [ -f "$SCRIPT_DIR/.env" ]; then
+            set -a; source "$SCRIPT_DIR/.env"; set +a
+        fi
+        _DEVICE="${DEVICE:-/dev/video0}"
+        _RESOLUTION="${RESOLUTION:-640x480}"
+        _FPS="${FPS:-15}"
+        _PORT="${PORT:-8080}"
+        _USERNAME="${USERNAME:-admin}"
+        _PASSWORD="${PASSWORD:-changeme}"
+
         cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Webcam MJPEG stream
 After=network.target
 
 [Service]
-EnvironmentFile=-$SCRIPT_DIR/.env
-ExecStart=/usr/local/bin/mjpg_streamer \\
-    -i "input_uvc.so -d \${DEVICE:-/dev/video0} -r \${RESOLUTION:-640x480} -f \${FPS:-15}" \\
-    -o "output_http.so -p \${PORT:-8080} -w /usr/local/share/mjpg-streamer/www -c \${USERNAME:-admin}:\${PASSWORD:-changeme}"
+ExecStart=/usr/local/bin/mjpg_streamer \
+    -i "input_uvc.so -d $_DEVICE -r $_RESOLUTION -f $_FPS" \
+    -o "output_http.so -p $_PORT -w /usr/local/share/mjpg-streamer/www -c $_USERNAME:$_PASSWORD"
 Restart=on-failure
 RestartSec=5
 
