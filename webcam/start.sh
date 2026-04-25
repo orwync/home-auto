@@ -1,6 +1,13 @@
 #!/bin/bash
 # Start the webcam stream
 
+# Load .env if present
+if [ -f "$(dirname "$0")/.env" ]; then
+    set -a
+    source "$(dirname "$0")/.env"
+    set +a
+fi
+
 DEVICE="${DEVICE:-/dev/video0}"
 RESOLUTION="${RESOLUTION:-640x480}"
 FPS="${FPS:-15}"
