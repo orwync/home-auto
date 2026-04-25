@@ -5,6 +5,8 @@ DEVICE="${DEVICE:-/dev/video0}"
 RESOLUTION="${RESOLUTION:-640x480}"
 FPS="${FPS:-15}"
 PORT="${PORT:-8080}"
+USERNAME="${USERNAME:-admin}"
+PASSWORD="${PASSWORD:-changeme}"
 
 if ! command -v mjpg_streamer &> /dev/null; then
     echo "mjpg_streamer not found. Run install.sh first."
@@ -18,7 +20,7 @@ fi
 
 mjpg_streamer \
     -i "input_uvc.so -d $DEVICE -r $RESOLUTION -f $FPS" \
-    -o "output_http.so -p $PORT -w /usr/local/share/mjpg-streamer/www" &
+    -o "output_http.so -p $PORT -w /usr/local/share/mjpg-streamer/www -c $USERNAME:$PASSWORD" &
 
 echo "Stream started:"
 echo "  http://$(hostname -I | awk '{print $1}'):$PORT/?action=stream"
