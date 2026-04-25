@@ -97,26 +97,34 @@ class TempSensor:
 
 
 if __name__ == "__main__":
+    import logging
     import sys
-    print(f"Reading DHT22 on GPIO4 (up to {_RETRIES} attempts, {_RETRY_DELAY}s apart)...")
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [%(levelname)-8s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    log = logging.getLogger(__name__)
+    log.info("Reading DHT22 on GPIO4 (up to %d attempts, %.1fs apart)...", _RETRIES, _RETRY_DELAY)
     try:
         sensor = TempSensor()
     except RuntimeError as e:
-        print(f"Error: {e}")
+        log.error("%s", e)
         sys.exit(1)
 
     for attempt in range(_RETRIES):
         temp, hum = sensor._trigger()
         bits = sensor._bit_count
         chk  = sum(sensor._data[:4]) & 0xFF
-        print(f"  Attempt {attempt + 1}: bits={bits}  data={sensor._data}  "
-              f"checksum={'ok' if chk == sensor._data[4] else f'FAIL (got {sensor._data[4]}, expected {chk})'}")
+        chk_status = "ok" if chk == sensor._data[4] else f"FAIL (got {sensor._data[4]}, expected {chk})"
+        log.debug("Attempt %d: bits=%d  data=%s  checksum=%s",
+                  attempt + 1, bits, sensor._data, chk_status)
         if temp is not None:
-            print(f"Temp: {temp:.1f}°C  Humidity: {hum:.1f}%")
+            log.info("Temp: %.1f°C  Humidity: %.1f%%", temp, hum)
             break
         if attempt < _RETRIES - 1:
             time.sleep(_RETRY_DELAY)
     else:
-        print("Read failed after all attempts.")
+        log.warning("Read failed after all attempts.")
 
     sensor.cleanup()
