@@ -4,8 +4,8 @@ LOG_FILE := /tmp/relay-light.log
 CMD_FIFO := /tmp/relay-light.cmd
 SERVICE  := relay-light
 
-.PHONY: install run start stop restart status logs diag power temp test clean \
-        light-on light-off light-auto fan-on fan-off fan-auto \
+.PHONY: install run start stop restart status logs diag power temp plot test clean \
+        light-on light-off light-auto \
         service-install service-uninstall service-start service-stop \
         service-restart service-status service-logs
 
@@ -53,6 +53,9 @@ power:
 temp:
 	$(PYTHON) temp_sensor.py
 
+plot:
+	$(PYTHON) plot.py
+
 # ── Manual control ────────────────────────────────────────────────────────────
 
 light-on:   _cmd_check
@@ -62,16 +65,7 @@ light-off:  _cmd_check
 	@echo "light off"  > $(CMD_FIFO) && echo "Light OFF"
 
 light-auto: _cmd_check
-	@echo "light auto" > $(CMD_FIFO) && echo "Light → auto (schedule)"
-
-fan-on:     _cmd_check
-	@echo "fan on"     > $(CMD_FIFO) && echo "Fan ON"
-
-fan-off:    _cmd_check
-	@echo "fan off"    > $(CMD_FIFO) && echo "Fan OFF"
-
-fan-auto:   _cmd_check
-	@echo "fan auto"   > $(CMD_FIFO) && echo "Fan → auto (temp-triggered)"
+	@echo "light auto" > $(CMD_FIFO) && echo "Lights → auto (schedule)"
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v

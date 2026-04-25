@@ -1,11 +1,11 @@
 # relay-light
 
-Controls a 100W mains light and cooling fans via relays on a Raspberry Pi 4B.
-Reads temperature and humidity from a DHT22 sensor every 60 seconds.
+Controls a 100W and a 40W mains light via relays on a Raspberry Pi 4B.
+Reads temperature and humidity from a DHT22 sensor every 60 seconds and stores readings in a SQLite database.
 
 ## Behaviour
 
-**Light** — time-scheduled:
+Both lights follow the same time schedule:
 
 | Time          | State |
 |---------------|-------|
@@ -13,16 +13,7 @@ Reads temperature and humidity from a DHT22 sensor every 60 seconds.
 | 12:00 – 18:00 | OFF   |
 | 18:00 – 00:00 | ON    |
 
-Power loss defaults to ON (relay de-energized, NO contact open).
-
-**Fans** — temperature-triggered:
-
-| Condition       | Action   |
-|-----------------|----------|
-| Temp ≥ 28 °C   | Fans ON  |
-| Temp ≤ 25 °C   | Fans OFF |
-
-Hysteresis prevents rapid cycling between thresholds.
+On shutdown both lights restore to ON (relays de-energized, NO contact open).
 
 ## Hardware
 
@@ -30,7 +21,7 @@ Hysteresis prevents rapid cycling between thresholds.
 - 2× 1-channel 5V relay module (active LOW, NO terminal)
 - DHT22 (AM2302) temperature & humidity sensor + 10 kΩ pull-up resistor
 - 100W mains light
-- Cooling fans
+- 40W mains light
 
 ## Wiring
 
@@ -40,38 +31,37 @@ Hysteresis prevents rapid cycling between thresholds.
  Raspberry Pi 4B
  ┌──────────────────────────────────────────────────────────────┐
  │                                                              │
- │  Pin  1   3.3V  ──────────────────────────┬─────────────────┼──► Light relay VCC
- │                                           ├─────────────────┼──► Fan relay VCC
+ │  Pin  1   3.3V  ──────────────────────────┬─────────────────┼──► 100W relay VCC
+ │                                           ├─────────────────┼──► 40W relay VCC
  │                                           ├─────────────────┼──► DHT22 pin 1 (VCC)
  │                                           └──[10 kΩ]────────┼──► DHT22 pin 2 (DATA)
- │  Pin  6   GND   ──────────────────────────┬─────────────────┼──► Light relay GND
- │                                           ├─────────────────┼──► Fan relay GND
+ │  Pin  6   GND   ──────────────────────────┬─────────────────┼──► 100W relay GND
+ │                                           ├─────────────────┼──► 40W relay GND
  │                                           └─────────────────┼──► DHT22 pin 4 (GND)
  │  Pin  7   GPIO4  (BCM)  ─────────────────────────────────────┼──► DHT22 pin 2 (DATA)
- │  Pin 11   GPIO17 (BCM)  ─────────────────────────────────────┼──► Light relay IN
- │  Pin 13   GPIO27 (BCM)  ─────────────────────────────────────┼──► Fan relay IN
+ │  Pin 11   GPIO17 (BCM)  ─────────────────────────────────────┼──► 100W relay IN
+ │  Pin 13   GPIO27 (BCM)  ─────────────────────────────────────┼──► 40W relay IN
  │                                                              │
  └──────────────────────────────────────────────────────────────┘
 
- Light relay — load side (mains voltage, de-power before touching)
+ 100W relay — load side (mains voltage, de-power before touching)
 
    Mains Live ────► COM
-                    NO ──────────────────────────────────► Light (live terminal)
-   Mains Neutral ───────────────────────────────────────► Light (neutral terminal)
+                    NO ──────────────────────────────────► 100W Light (live terminal)
+   Mains Neutral ───────────────────────────────────────► 100W Light (neutral terminal)
 
- Fan relay — load side
+ 40W relay — load side (mains voltage, de-power before touching)
 
-   Fan V+ ────► COM
-                NO ──────────────────────────────────────► Fan V+ (switched)
-   Fan GND  ───────────────────────────────────────────► Fan GND
+   Mains Live ────► COM
+                    NO ──────────────────────────────────► 40W Light (live terminal)
+   Mains Neutral ───────────────────────────────────────► 40W Light (neutral terminal)
 ```
 
-> **Warning:** The light relay load side carries mains voltage (120V/240V AC).
-> De-power before wiring.
+> **Warning:** Both relay load sides carry mains voltage (120V/240V AC). De-power before wiring.
 
 ---
 
-### Light relay
+### 100W light relay
 
 | Relay Pin | Pi Pin       | BCM    |
 |-----------|--------------|--------|
@@ -81,7 +71,7 @@ Hysteresis prevents rapid cycling between thresholds.
 
 ---
 
-### Fan relay
+### 40W light relay
 
 | Relay Pin | Pi Pin       | BCM    |
 |-----------|--------------|--------|
@@ -146,71 +136,77 @@ sudo systemctl enable pigpiod
 python3 main.py
 ```
 
-Press `Ctrl+C` to stop. Light restores to ON; fans turn OFF on exit.
+Press `Ctrl+C` to stop. Both lights restore to ON on exit.
 
 ## Make targets
 
-| Target             | Description                              |
-|--------------------|------------------------------------------|
-| `make run`         | Run in foreground                        |
-| `make start`       | Run in background (logs to file)         |
-| `make stop`        | Stop background process                  |
-| `make restart`     | Stop then start                          |
-| `make status`      | Show if running                          |
-| `make logs`        | Tail the log file                        |
-| `make temp`        | One-shot sensor read                     |
-| `make diag`        | Raw GPIO diagnostic                      |
-| `make power`       | Power & cost report                      |
-| `make test`        | Run unit tests                           |
-| `make light-on`    | Turn light ON  (manual override)         |
-| `make light-off`   | Turn light OFF (manual override)         |
-| `make light-auto`  | Return light to time schedule            |
-| `make fan-on`      | Turn fans ON   (manual override)         |
-| `make fan-off`     | Turn fans OFF  (manual override)         |
-| `make fan-auto`    | Return fans to temperature control       |
-
-Manual commands take effect immediately. The service must be running.
-Use `light-auto` / `fan-auto` to hand control back to the schedule/sensor.
+| Target              | Description                          |
+|---------------------|--------------------------------------|
+| `make run`          | Run in foreground                    |
+| `make start`        | Run in background (logs to file)     |
+| `make stop`         | Stop background process              |
+| `make restart`      | Stop then start                      |
+| `make status`       | Show if running                      |
+| `make logs`         | Tail the log file                    |
+| `make temp`         | One-shot sensor read                 |
+| `make diag`         | Raw GPIO diagnostic                  |
+| `make power`        | Power & cost report                  |
+| `make plot`         | Plot temp/humidity from DB           |
+| `make test`         | Run unit tests                       |
+| `make light-on`     | Turn both lights ON (manual)         |
+| `make light-off`    | Turn both lights OFF (manual)        |
+| `make light-auto`   | Return lights to time schedule       |
+| `make service-install`   | Install and enable systemd service  |
+| `make service-uninstall` | Remove systemd service              |
+| `make service-start`     | Start service                       |
+| `make service-stop`      | Stop service                        |
+| `make service-restart`   | Restart service                     |
+| `make service-status`    | Show service status                 |
+| `make service-logs`      | Tail service logs                   |
 
 ## Configuration
 
 Edit `main.py`:
 
-| Variable         | Default | Description                           |
-|------------------|---------|---------------------------------------|
-| `RELAY_GPIO_PIN` | `17`    | BCM GPIO pin — light relay IN         |
-| `FAN_GPIO_PIN`   | `27`    | BCM GPIO pin — fan relay IN           |
-| `OFF_START`      | `12`    | Hour (24h) when light turns OFF       |
-| `OFF_END`        | `18`    | Hour (24h) when light turns back ON   |
-| `CHECK_INTERVAL` | `30`    | Seconds between schedule checks       |
-| `TEMP_GPIO_PIN`  | `4`     | BCM GPIO pin — DHT22 DATA             |
-| `TEMP_INTERVAL`  | `60`    | Seconds between temperature log lines |
-| `FAN_TEMP_ON`    | `28.0`  | °C threshold to turn fans ON          |
-| `FAN_TEMP_OFF`   | `25.0`  | °C threshold to turn fans OFF         |
+| Variable            | Default | Description                           |
+|---------------------|---------|---------------------------------------|
+| `LIGHT100_GPIO_PIN` | `17`    | BCM GPIO pin — 100W relay IN          |
+| `LIGHT40_GPIO_PIN`  | `27`    | BCM GPIO pin — 40W relay IN           |
+| `TEMP_GPIO_PIN`     | `4`     | BCM GPIO pin — DHT22 DATA             |
+| `OFF_START`         | `12`    | Hour (24h) when lights turn OFF       |
+| `OFF_END`           | `18`    | Hour (24h) when lights turn back ON   |
+| `CHECK_INTERVAL`    | `30`    | Seconds between schedule checks       |
+| `TEMP_INTERVAL`     | `60`    | Seconds between temperature readings  |
+
+## Sensor data
+
+Temperature and humidity are stored in `sensor_data.db` (SQLite, one row per minute).
+
+Plot the data:
+
+```bash
+python3 plot.py              # all data
+python3 plot.py --hours 24   # last 24 hours
+python3 plot.py --from "2026-04-01" --to "2026-04-25"
+```
 
 ## Run on boot (systemd)
 
 ```bash
 make service-install
-make service-start
-```
-
-Or via cron:
-
-```bash
-crontab -e
-# add:
-@reboot cd /home/orwync/Projects/home-auto/relay-light && python3 main.py &
 ```
 
 ## Files
 
 ```
 relay-light/
-├── main.py          # Schedule + fan + temp logging loop
+├── main.py          # Schedule + temp logging loop
 ├── relay.py         # Relay GPIO control
 ├── temp_sensor.py   # DHT22 sensor wrapper
+├── plot.py          # Plot temp/humidity from sensor_data.db
 ├── power.py         # Power & cost calculator
 ├── diag.py          # Raw GPIO diagnostic
+├── sensor_data.db   # SQLite database (created at runtime)
+├── relay-light.log  # Rotating log file (created at runtime)
 └── requirements.txt
 ```
