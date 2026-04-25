@@ -1,16 +1,11 @@
 PYTHON   := python3
 PID_FILE := /tmp/relay-light.pid
-LOG_FILE := /tmp/relay-light.log
-CMD_FIFO := /tmp/relay-light.cmd
+LOG_FILE := relay-light.log
 SERVICE  := relay-light
 
 .PHONY: install run start stop restart status logs diag power temp plot test clean \
-        light-on light-off light-auto \
         service-install service-uninstall service-start service-stop \
         service-restart service-status service-logs
-
-_cmd_check:
-	@test -p $(CMD_FIFO) || (echo "Service not running (no command FIFO found)"; exit 1)
 
 # ── Python ────────────────────────────────────────────────────────────────────
 
@@ -56,24 +51,13 @@ temp:
 plot:
 	$(PYTHON) plot.py
 
-# ── Manual control ────────────────────────────────────────────────────────────
-
-light-on:   _cmd_check
-	@echo "light on"   > $(CMD_FIFO) && echo "Light ON"
-
-light-off:  _cmd_check
-	@echo "light off"  > $(CMD_FIFO) && echo "Light OFF"
-
-light-auto: _cmd_check
-	@echo "light auto" > $(CMD_FIFO) && echo "Lights → auto (schedule)"
-
 test:
 	$(PYTHON) -m unittest discover -s tests -v
 
 clean:
 	find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete 2>/dev/null || true
-	rm -f $(PID_FILE) $(LOG_FILE)
+	rm -f $(PID_FILE)
 
 # ── systemd ───────────────────────────────────────────────────────────────────
 

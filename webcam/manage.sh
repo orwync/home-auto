@@ -60,7 +60,7 @@ EOF
         systemctl enable $SERVICE
         systemctl start $SERVICE
         echo "Service installed, enabled, and started."
-        echo "Stream: http://$(hostname -I | awk '{print $1}'):${PORT:-8080}/?action=stream"
+        echo "Stream: http://$(hostname -I | awk '{print $1}'):$_PORT/?action=stream"
         ;;
 
     uninstall)

@@ -3,6 +3,8 @@
 Raw GPIO diagnostic — bypasses Relay class entirely.
 Toggles GPIO17 (physical pin 11) HIGH/LOW every 3 seconds.
 Watch the relay module LED and the light to find the working combo.
+
+Note: only tests GPIO17 (100W relay). To test GPIO27 (40W relay), change PIN below.
 """
 
 import logging
