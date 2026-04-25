@@ -9,11 +9,12 @@ Home automation projects running on Raspberry Pi 4B.
 - **40W light relay:** 1-channel 5V relay module (active LOW), wired to NO contact — GPIO27 (physical pin 13)
 - **Load:** 100W mains light + 40W mains light
 - **Temp sensor:** DHT22 (AM2302) — temperature & humidity, 1-wire-like single-bus protocol
-- **Camera:** Logitech USB webcam (planned)
+- **Camera:** Logitech USB webcam — USB, streams via mjpg-streamer on port 8080
 
 ## Projects
 
 - `relay-light/` — Time-scheduled 100W + 40W lights via relays. Both ON 00:00–12:00 and 18:00–00:00, OFF 12:00–18:00. Logs temperature/humidity every 60 s.
+- `webcam/` — MJPEG live stream over HTTP via mjpg-streamer. Accessible on local network at port 8080.
 
 ## Conventions
 
