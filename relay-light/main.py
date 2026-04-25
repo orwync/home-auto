@@ -8,6 +8,7 @@ Relay light controller — Raspberry Pi 4B
 
 import logging
 import signal
+import sqlite3
 import sys
 import time
 from datetime import datetime
@@ -29,8 +30,23 @@ OFF_START = 12  # noon
 OFF_END   = 18  # 6pm
 
 LOG_FILE = Path(__file__).parent / "relay-light.log"
+DB_FILE  = Path(__file__).parent / "sensor_data.db"
 
 log = logging.getLogger(__name__)
+
+
+def init_db(path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS readings (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT    NOT NULL,
+            temp      REAL    NOT NULL,
+            humidity  REAL    NOT NULL
+        )
+    """)
+    conn.commit()
+    return conn
 
 
 def setup_logging():
@@ -59,6 +75,7 @@ def light_should_be_on() -> bool:
 def main():
     setup_logging()
 
+    db       = init_db(DB_FILE)
     light100 = Relay(pin=LIGHT100_GPIO_PIN, active_low=True, contact='NO')
     light40  = Relay(pin=LIGHT40_GPIO_PIN,  active_low=True, contact='NO')
     sensor   = TempSensor(gpio_pin=TEMP_GPIO_PIN)
@@ -70,6 +87,7 @@ def main():
         light100.cleanup()
         light40.cleanup()
         sensor.cleanup()
+        db.close()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown)
@@ -105,6 +123,11 @@ def main():
             temp, hum = sensor.read()
             if temp is not None:
                 log.info("Temp %.1f°C  Humidity %.1f%%", temp, hum)
+                db.execute(
+                    "INSERT INTO readings (timestamp, temp, humidity) VALUES (?, ?, ?)",
+                    (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), temp, hum),
+                )
+                db.commit()
             else:
                 log.warning("Temp read failed (will retry)")
             last_temp_log = time.monotonic()
