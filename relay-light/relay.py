@@ -33,10 +33,13 @@ class Relay:
             return GPIO.HIGH if energize else GPIO.LOW
 
     def on(self):
+        GPIO.setup(self.pin, GPIO.OUT)
         GPIO.output(self.pin, self._signal(on=True))
 
     def off(self):
-        GPIO.output(self.pin, self._signal(on=False))
+        # Float the pin (INPUT mode) to de-energize — driving HIGH still leaves
+        # 1.7 V across the 5 V coil, which is enough to hold the relay in.
+        GPIO.setup(self.pin, GPIO.IN)
 
     def cleanup(self):
         GPIO.cleanup(self.pin)

@@ -76,8 +76,8 @@ def main():
     setup_logging()
 
     db       = init_db(DB_FILE)
-    light100 = Relay(pin=LIGHT100_GPIO_PIN, active_low=False, contact='NO')
-    light40  = Relay(pin=LIGHT40_GPIO_PIN,  active_low=False, contact='NO')
+    light100 = Relay(pin=LIGHT100_GPIO_PIN, active_low=True, contact='NO')
+    light40  = Relay(pin=LIGHT40_GPIO_PIN,  active_low=True, contact='NO')
     sensor   = TempSensor(gpio_pin=TEMP_GPIO_PIN)
 
     def shutdown(sig, frame):
