@@ -5,8 +5,8 @@ Home automation projects running on Raspberry Pi 4B.
 ## Hardware
 
 - **Board:** Raspberry Pi 4B
-- **100W light relay:** 1-channel 5V relay module (active LOW), wired to NO contact — GPIO17 (physical pin 11)
-- **40W light relay:** 1-channel 5V relay module (active LOW), wired to NO contact — GPIO27 (physical pin 13)
+- **100W light relay:** 1-channel 5V relay module, wired to NO contact — GPIO17 (physical pin 11)
+- **40W light relay:** 1-channel 5V relay module, wired to NO contact — GPIO27 (physical pin 13)
 - **Load:** 100W mains light + 40W mains light
 - **Temp sensor:** DHT22 (AM2302) — temperature & humidity, 1-wire-like single-bus protocol
 - **Camera:** Logitech USB webcam — USB, streams via mjpg-streamer on port 8080
@@ -22,8 +22,9 @@ Home automation projects running on Raspberry Pi 4B.
 - 100W light relay control pin: GPIO17 (physical pin 11).
 - 40W light relay control pin: GPIO27 (physical pin 13).
 - DHT22 data pin: GPIO4 (physical pin 7). Requires a 10 kΩ pull-up resistor to 3.3V.
-- All sensor/relay VCC must be wired to Pin 1 (3.3V), not 5V — Pi GPIO logic is 3.3V.
-- All scripts must restore hardware to a safe default state on exit (both lights ON, relays de-energized).
+- Relay VCC must be wired to 5V (Pin 2 or 4). At 3.3V the coil does not reliably actuate the contacts.
+- Relay GPIO signal is 3.3V logic (active LOW — LOW energizes). However, driving HIGH (3.3V) leaves 1.7V across the 5V coil, which is enough to hold the relay in. The only reliable OFF state is floating the pin (INPUT mode). `relay.py` implements `off()` this way.
+- All scripts must restore hardware to a safe default state on exit (relays de-energized, lights OFF).
 - Use `RPi.GPIO` for relay GPIO control. Use `pigpio` (daemon-based, hardware-timed) for DHT22 — pure Python bit-banging is too jittery for reliable reads.
 - Both lights are wired to NO (Normally Open) terminal on their relay.
 - DHT22 reads are best-effort — transient failures (RuntimeError) are expected and retried silently.

@@ -3,14 +3,13 @@ import RPi.GPIO as GPIO
 
 class Relay:
     """
-    Controls a single-channel 5V relay module.
+    Controls a single-channel 5V relay module (VCC = 5V, signal = 3.3V GPIO).
 
-    active_low: True if the module triggers on GPIO LOW (most common).
-    contact:    'NC' (Normally Closed) or 'NO' (Normally Open) — whichever
-                terminal the light is wired to on the relay.
+    active_low: True if the module energizes on GPIO LOW.
+    contact:    'NC' or 'NO' — whichever terminal the load is wired to.
 
-    NC wiring: light ON = relay de-energized (coil off, NC contact closed)
-    NO wiring: light ON = relay energized   (coil on,  NO contact closed)
+    off() floats the pin (INPUT mode) rather than driving HIGH, because 3.3V
+    HIGH leaves 1.7V across the 5V coil — enough to hold the relay in.
     """
 
     def __init__(self, pin: int, active_low: bool = True, contact: str = 'NC'):
